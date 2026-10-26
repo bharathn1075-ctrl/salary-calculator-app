@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Salary Calculator</title>
+    <!-- Tailwind CSS for modern styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 min-h-screen flex flex-col items-center py-6 px-4">
+
+    <div class="bg-white shadow-lg rounded-2xl p-6 w-full max-w-md">
+        <h1 class="text-2xl font-bold text-center text-slate-800 mb-1">Salary Calculator</h1>
+        <p class="text-center text-sm text-slate-500 mb-4">Karnataka Edition</p>
+
+        <!-- Month Navigation -->
+        <div class="flex justify-between items-center mb-4">
+            <button onclick="changeMonth(-1)" class="bg-slate-200 hover:bg-slate-300 px-3 py-1 rounded-lg font-bold">&larr;</button>
+            <h2 id="month-year" class="text-lg font-semibold text-slate-700"></h2>
+            <button onclick="changeMonth(1)" class="bg-slate-200 hover:bg-slate-300 px-3 py-1 rounded-lg font-bold">&rarr;</button>
+        </div>
+
+        <!-- Calendar Grid Header -->
+        <div class="grid grid-cols-7 gap-1 text-center font-bold text-xs text-slate-400 mb-2">
+            <div>Su</div><div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div>Sa</div>
+        </div>
+
+        <!-- Calendar Days Grid -->
+        <div id="calendar-days" class="grid grid-cols-7 gap-1 text-center text-sm mb-4"></div>
+
+        <!-- Status Info Display -->
+        <div id="info-display" class="bg-slate-50 border border-slate-200 rounded-lg p-3 text-center text-sm text-slate-600 mb-4">
+            Click any date to cycle: Worked &rarr; Half-Day &rarr; Leave &rarr; Clear
+        </div>
+
+        <!-- Legend -->
+        <div class="flex flex-wrap justify-center gap-3 text-xs font-semibold mb-5">
+            <span class="flex items-center gap-1"><span class="w-3 h-3 bg-emerald-500 rounded-full inline-block"></span> Worked</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-3 bg-teal-400 rounded-full inline-block"></span> Half-Day</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-3 bg-rose-400 rounded-full inline-block"></span> Leave</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-3 bg-amber-500 rounded-full inline-block"></span> Holiday</span>
+        </div>
+
+        <!-- Summary Box -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-4">
+            <div class="flex justify-between items-center text-slate-700 mb-2">
+                <span>Total Worked Days:</span>
+                <span id="total-days" class="font-bold">0</span>
+            </div>
+            <div class="flex justify-between items-center text-slate-700 mb-2">
+                <label for="daily-rate-input" class="cursor-pointer">Daily Rate (₹):</label>
+                <input type="number" id="daily-rate-input" value="1540" onchange="updateDailyRate(this.value)" class="w-28 text-right font-bold border border-slate-300 rounded-lg px-2 py-1 focus:outline-none focus:border-emerald-500">
+            </div>
+            <div class="border-t pt-2 flex justify-between items-center">
+                <span class="text-lg font-bold text-slate-800">Total Salary:</span>
+                <span id="total-salary" class="text-xl font-extrabold text-emerald-600">₹0</span>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex gap-2">
+            <button onclick="exportToCSV()" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl transition shadow-md text-sm">
+                Export CSV
+            </button>
+            <button onclick="clearAll()" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-2.5 rounded-xl transition shadow-md text-sm">
+                Clear All
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let dailyRate = parseFloat(localStorage.getItem("salary_daily_rate")) || 1540;
+        document.getElementById("daily-rate-input").value = dailyRate;
+
+        // Stores status per date: "YYYY-MM-DD": "full" | "half" | "leave"
+        let selectedDates = JSON.parse(localStorage.getItem("salary_selected_dates")) || {};
+        let currentDate = new Date();
+
+        // Karnataka Holidays List
+        const holidays = {
+            "2026-01-15": "Makara Sankranti",
+            "2026-01-26": "Republic Day",
+            "2026-02-15": "Maha Shivaratri",
+            "2026-03-19": "Ugadi Festival",
+            "2026-03-21": "Id-ul-Fitr (Ramzan)",
+            "2026-03-31": "Mahavir Jayanti",
+            "2026-04-03": "Good Friday",
+            "2026-04-14": "Dr. B.R. Ambedkar Jayanthi",
+            "2026-04-20": "Basava Jayanti",
+            "2026-05-01": "May Day / Labour Day",
+            "2026-05-28": "Bakrid / Eid al-Adha",
+            "2026-06-26": "Muharram",
+            "2026-08-15": "Independence Day",
+            "2026-08-26": "Eid-e-Milad",
+            "2026-08-28": "Varamahalakshmi Vrata",
+            "2026-09-04": "Krishna Janmashtami",
+            "2026-09-14": "Ganesh Chaturthi",
+            "2026-10-02": "Gandhi Jayanthi",
+            "2026-10-20": "Mahanavami / Ayudha Pooja",
+            "2026-10-21": "Vijayadashami (Dasara)",
+            "2026-11-10": "Deepavali (Balipadyami)",
+            "2026-11-27": "Kanakadasa Jayanti",
+            "2026-12-25": "Christmas"
+        };
+
+        const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+        function saveData() {
+            localStorage.setItem("salary_selected_dates", JSON.stringify(selectedDates));
+            localStorage.setItem("salary_daily_rate", dailyRate);
+        }
+
+        function renderCalendar() {
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
+
+            document.getElementById("month-year").innerText = `${monthNames[month]} ${year}`;
+
+            const firstDayIndex = new Date(year, month, 1).getDay();
+            const totalDays = new Date(year, month + 1, 0).getDate();
+
+            let daysContainer = document.getElementById("calendar-days");
+            daysContainer.innerHTML = "";
+
+            // Blank spaces for previous month offset
+            for (let i = 0; i < firstDayIndex; i++) {
+                daysContainer.innerHTML += `<div></div>`;
+            }
+
+            // Render days of the month
+            for (let day = 1; day <= totalDays; day++) {
+                const formattedMonth = String(month + 1).padStart(2, '0');
+                const formattedDay = String(day).padStart(2, '0');
+                const dateStr = `${year}-${formattedMonth}-${formattedDay}`;
+
+                let btnClass = "h-10 w-10 mx-auto flex items-center justify-center rounded-xl font-medium transition cursor-pointer text-slate-700 ";
+                
+                const status = selectedDates[dateStr];
+                if (status === "full") {
+                    btnClass += "bg-emerald-500 text-white font-bold shadow-sm"; // Full Day
+                } else if (status === "half") {
+                    btnClass += "bg-teal-400 text-white font-bold shadow-sm"; // Half Day
+                } else if (status === "leave") {
+                    btnClass += "bg-rose-400 text-white font-bold shadow-sm"; // Leave
+                } else if (holidays[dateStr]) {
+                    btnClass += "bg-amber-100 text-amber-800 border border-amber-300 font-bold"; // Holiday
+                } else {
+                    btnClass += "hover:bg-slate-200 bg-slate-50";
+                }
+
+                daysContainer.innerHTML += `<div onclick="toggleDate('${dateStr}')" class="${btnClass}">${day}</div>`;
+            }
+        }
+
+        function toggleDate(dateStr) {
+            const infoDisplay = document.getElementById("info-display");
+            const currentStatus = selectedDates[dateStr];
+
+            // Cycle: undefined -> full -> half -> leave -> deleted
+            if (!currentStatus) {
+                selectedDates[dateStr] = "full";
+            } else if (currentStatus === "full") {
+                selectedDates[dateStr] = "half";
+            } else if (currentStatus === "half") {
+                selectedDates[dateStr] = "leave";
+            } else {
+                delete selectedDates[dateStr];
+            }
+
+            let statusText = "";
+            if (selectedDates[dateStr] === "full") statusText = "Worked (Full Day)";
+            else if (selectedDates[dateStr] === "half") statusText = "Worked (Half-Day)";
+            else if (selectedDates[dateStr] === "leave") statusText = "Marked as Leave";
+            else statusText = "Cleared date status";
+
+            if (holidays[dateStr]) {
+                infoDisplay.innerHTML = `🎉 <b>Holiday (${holidays[dateStr]}):</b> ${dateStr} &rarr; ${statusText}`;
+                infoDisplay.className = "bg-amber-50 border border-amber-200 rounded-lg p-3 text-center text-sm text-amber-800 mb-4 font-medium";
+            } else {
+                infoDisplay.innerHTML = `📅 <b>${dateStr}:</b> ${statusText}`;
+                infoDisplay.className = "bg-slate-50 border border-slate-200 rounded-lg p-3 text-center text-sm text-slate-600 mb-4";
+            }
+
+            saveData();
+            renderCalendar();
+            updateSummary();
+        }
+
+        function changeMonth(direction) {
+            currentDate.setMonth(currentDate.getMonth() + direction);
+            renderCalendar();
+        }
+
+        function updateDailyRate(value) {
+            dailyRate = parseFloat(value) || 0;
+            saveData();
+            updateSummary();
+        }
+
+        function updateSummary() {
+            let totalWorkedDays = 0;
+            for (let date in selectedDates) {
+                if (selectedDates[date] === "full") totalWorkedDays += 1;
+                if (selectedDates[date] === "half") totalWorkedDays += 0.5;
+            }
+
+            const totalSalary = totalWorkedDays * dailyRate;
+
+            document.getElementById("total-days").innerText = totalWorkedDays;
+            document.getElementById("total-salary").innerText = "₹" + totalSalary.toLocaleString('en-IN', {maximumFractionDigits: 2});
+        }
+
+        function clearAll() {
+            if (confirm("Are you sure you want to clear all selected dates?")) {
+                selectedDates = {};
+                saveData();
+                renderCalendar();
+                updateSummary();
+                document.getElementById("info-display").innerHTML = "All selections cleared";
+                document.getElementById("info-display").className = "bg-slate-50 border border-slate-200 rounded-lg p-3 text-center text-sm text-slate-600 mb-4";
+            }
+        }
+
+        function exportToCSV() {
+            let csvContent = "data:text/csv;charset=utf-8,Date,Status,Daily Rate,Earnings\n";
+            
+            const sortedDates = Object.keys(selectedDates).sort();
+            sortedDates.forEach(date => {
+                const status = selectedDates[date];
+                let weight = status === "full" ? 1 : (status === "half" ? 0.5 : 0);
+                let earnings = weight * dailyRate;
+                csvContent += `${date},${status},${dailyRate},${earnings}\n`;
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `salary_report_${monthNames[currentDate.getMonth()]}_${currentDate.getFullYear()}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Initialize on load
+        renderCalendar();
+        updateSummary();
+    </script>
+</body>
+</html>
